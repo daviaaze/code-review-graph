@@ -58,13 +58,15 @@ _BUILTIN_CALL_NAMES: set[str] = {
 }
 
 
-def _validate_repo_root(path: Path) -> Path:
+def _validate_repo_root(path: str | Path) -> Path:
     """Validate that a path is a plausible project root.
 
     Ensures the path is an existing directory that contains a ``.git``
     or ``.code-review-graph`` directory, preventing arbitrary file-system
     traversal via the ``repo_root`` parameter.
     """
+    if isinstance(path, str):
+        path = Path(path)
     resolved = path.resolve()
     if not resolved.is_dir():
         raise ValueError(

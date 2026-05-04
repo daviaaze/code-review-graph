@@ -21,48 +21,36 @@ def embed_graph(
 ) -> dict[str, Any]:
     """Compute vector embeddings for all graph nodes to enable semantic search.
 
-    Requires: ``pip install code-review-graph[embeddings]`` (local provider only;
-    cloud providers like ``openai`` / ``google`` / ``minimax`` use stdlib ``urllib``).
+    Requires: ``pip install code-review-graph[embeddings]``
     Default model: all-MiniLM-L6-v2. Override via ``model`` param or
     CRG_EMBEDDING_MODEL env var.
-    Changing the model or provider re-embeds all nodes automatically.
+    Changing the model re-embeds all nodes automatically.
 
     Only embeds nodes that don't already have up-to-date embeddings.
 
     Args:
         repo_root: Repository root path. Auto-detected if omitted.
-        model: Embedding model name. For local: HuggingFace ID or path;
-               for openai: model ID (e.g. ``text-embedding-3-small``);
-               for google: Gemini model ID. Falls back to
-               CRG_EMBEDDING_MODEL / CRG_OPENAI_MODEL env vars as appropriate.
-        provider: Provider name: ``local`` (default), ``openai``, ``google``,
-                  or ``minimax``. ``openai`` requires CRG_OPENAI_BASE_URL +
-                  CRG_OPENAI_API_KEY + CRG_OPENAI_MODEL env vars and accepts
-                  any OpenAI-compatible endpoint (real OpenAI, Azure, new-api,
-                  LiteLLM, vLLM, LocalAI, Ollama openai-mode, etc.).
+        model: Embedding model name (HuggingFace ID or local path).
+               Falls back to CRG_EMBEDDING_MODEL env var, then
+               all-MiniLM-L6-v2.
+        provider: Provider name (local, openai, google, minimax).
+                  Currently only "local" is fully supported.
 
     Returns:
         Number of nodes embedded and total embedding count.
     """
     store, root = _get_store(repo_root)
     db_path = get_db_path(root)
-    emb_store = EmbeddingStore(db_path, provider=provider, model=model)
+    emb_store = EmbeddingStore(db_path, model=model)
     try:
         if not emb_store.available:
-            if provider in ("openai", "google", "minimax"):
-                err = (
-                    f"The '{provider}' embedding provider is not available. "
-                    "Check the required environment variables "
-                    "(see README and `get_provider()` docstring) and that "
-                    "the endpoint is reachable."
-                )
-            else:
-                err = (
-                    "The local embedding provider needs sentence-transformers. "
-                    "Install with: pip install code-review-graph[embeddings] — "
-                    "or switch provider to 'openai' / 'google' / 'minimax'."
-                )
-            return {"status": "error", "error": err}
+            return {
+                "status": "error",
+                "error": (
+                    "sentence-transformers is not installed. "
+                    "Install with: pip install code-review-graph[embeddings]"
+                ),
+            }
 
         newly_embedded = embed_all_nodes(store, emb_store)
         total = emb_store.count()
@@ -133,7 +121,7 @@ def get_docs_section(
     for search_root in search_roots:
         candidate = search_root / "docs" / "LLM-OPTIMIZED-REFERENCE.md"
         if candidate.exists():
-            content = candidate.read_text(encoding="utf-8", errors="replace")
+            content = candidate.read_text(encoding="utf-8")
             match = _re.search(
                 rf'<section name="{_re.escape(section_name)}">'
                 r"(.*?)</section>",
@@ -168,17 +156,19 @@ def get_docs_section(
 def generate_wiki_func(
     repo_root: str | None = None,
     force: bool = False,
+    output_dir: str | None = None,
 ) -> dict[str, Any]:
     """Generate a markdown wiki from the community structure.
 
     [DOCS] Creates a wiki page for each detected community and an index
     page. Pages are written to ``.code-review-graph/wiki/`` inside the
-    repository. Only regenerates pages whose content has changed unless
-    force=True.
+    repository (or ``output_dir`` if provided). Only regenerates pages
+    whose content has changed unless force=True.
 
     Args:
         repo_root: Repository root path. Auto-detected if omitted.
         force: If True, regenerate all pages even if content is unchanged.
+        output_dir: Optional output directory for wiki files.
 
     Returns:
         Status with pages_generated, pages_updated, pages_unchanged counts.
@@ -188,7 +178,11 @@ def generate_wiki_func(
 
     store, root = _get_store(repo_root)
     try:
-        wiki_dir = get_data_dir(root) / "wiki"
+        if output_dir:
+            wiki_dir = Path(output_dir)
+            wiki_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            wiki_dir = get_data_dir(root) / "wiki"
         result = generate_wiki(store, wiki_dir, force=force)
         total = (
             result["pages_generated"]
