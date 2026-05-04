@@ -1,0 +1,20 @@
+{
+  "name": "pi-code-review-graph",
+  "version": "0.1.0",
+  "description": "Pi agent extension bridging to code-review-graph MCP server",
+  "keywords": ["pi-package", "code-review", "knowledge-graph", "mcp"],
+  "license": "MIT",
+  "author": "Your Name",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/code-review-graph-flake"
+  },
+  "pi": {
+    "extensions": ["./code-review-graph.ts"]
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-ai": "*",
+    "typebox": "*"
+  }
+}

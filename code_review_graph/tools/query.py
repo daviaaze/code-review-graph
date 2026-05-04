@@ -380,7 +380,6 @@ def semantic_search_nodes(
     repo_root: str | None = None,
     context_files: list[str] | None = None,
     model: str | None = None,
-    provider: str | None = None,
     detail_level: str = "standard",
 ) -> dict[str, Any]:
     """Search for nodes by name, keyword, or semantic similarity.
@@ -405,7 +404,7 @@ def semantic_search_nodes(
     try:
         results = hybrid_search(
             store, query, kind=kind, limit=limit, context_files=context_files,
-            model=model, provider=provider,
+            model=model,
         )
 
         search_mode = "hybrid"
@@ -518,7 +517,7 @@ def list_graph_stats(repo_root: str | None = None) -> dict[str, Any]:
 
 
 def find_large_functions(
-    min_lines: int = 50,
+    max_lines: int = 50,
     kind: str | None = None,
     file_path_pattern: str | None = None,
     limit: int = 50,
@@ -530,7 +529,7 @@ def find_large_functions(
     and enforcing size limits during code review.
 
     Args:
-        min_lines: Minimum line count to flag (default: 50).
+        max_lines: Maximum line count to flag (default: 50).
         kind: Filter by node kind: Function, Class, File, or Test.
         file_path_pattern: Filter by file path substring (e.g. "components/").
         limit: Maximum results (default: 50).
@@ -542,7 +541,7 @@ def find_large_functions(
     store, root = _get_store(repo_root)
     try:
         nodes = store.get_nodes_by_size(
-            min_lines=min_lines,
+            min_lines=max_lines,
             kind=kind,
             file_path_pattern=file_path_pattern,
             limit=limit,
@@ -564,7 +563,7 @@ def find_large_functions(
             results.append(d)
 
         summary_parts = [
-            f"Found {len(results)} node(s) with >= {min_lines} lines"
+            f"Found {len(results)} node(s) with >= {max_lines} lines"
             + (f" (kind={kind})" if kind else "")
             + (f" matching '{file_path_pattern}'" if file_path_pattern else "")
             + ":",
@@ -581,7 +580,7 @@ def find_large_functions(
             "status": "ok",
             "summary": "\n".join(summary_parts),
             "total_found": len(results),
-            "min_lines": min_lines,
+            "max_lines": max_lines,
             "results": results,
         }
     finally:
@@ -594,32 +593,37 @@ def find_large_functions(
 
 
 def traverse_graph_func(
-    query: str,
-    mode: str = "bfs",
-    depth: int = 3,
-    token_budget: int = 2000,
+    start_node: str,
+    method: str = "bfs",
+    max_depth: int = 3,
+    edge_kinds: list[str] | None = None,
     repo_root: str | None = None,
 ) -> dict[str, Any]:
     """BFS/DFS traversal from best-matching node.
 
     Args:
-        query: Search string to find the starting node.
-        mode: "bfs" (breadth-first) or "dfs" (depth-first).
-        depth: Max traversal depth (1-6). Default: 3.
-        token_budget: Approximate token limit for results.
+        start_node: Starting node name or qualified name.
+        method: "bfs" (breadth-first) or "dfs" (depth-first).
+        max_depth: Max traversal depth (1-6). Default: 3.
+        edge_kinds: Optional filter by edge kinds (e.g. CALLS, IMPORTS).
         repo_root: Repository root path.
     """
     store, root = _get_store(repo_root)
     try:
-        results = hybrid_search(store, query, limit=1)
-        if not results:
-            return {
-                "error": f"No node matching '{query}'",
-                "nodes": [],
-            }
+        # Try direct lookup first, then search
+        node = store.get_node(start_node)
+        if not node:
+            results = hybrid_search(store, start_node, limit=1)
+            if not results:
+                return {
+                    "error": f"No node matching '{start_node}'",
+                    "nodes": [],
+                }
+            start_qn = results[0]["qualified_name"]
+        else:
+            start_qn = node.qualified_name
 
-        start_qn = results[0]["qualified_name"]
-        depth = max(1, min(depth, 6))
+        depth = max(1, min(max_depth, 6))
 
         # BFS / DFS traversal
         visited: dict[str, int] = {}  # qn -> depth
@@ -630,7 +634,7 @@ def traverse_graph_func(
         approx_tokens = 0
 
         while queue:
-            if mode == "bfs":
+            if method == "bfs":
                 current_qn, cur_depth = queue.pop(0)
             else:
                 current_qn, cur_depth = queue.pop()
@@ -653,34 +657,34 @@ def traverse_graph_func(
                 "depth": cur_depth,
             }
             approx_tokens += len(str(entry)) // 4
-            if approx_tokens > token_budget:
+            if approx_tokens > 2000:
                 break
 
             traversal.append(entry)
 
             # Get neighbours
-            out_edges = store.get_edges_by_source(
-                current_qn
-            )
-            in_edges = store.get_edges_by_target(
-                current_qn
-            )
+            out_edges = store.get_edges_by_source(current_qn)
+            in_edges = store.get_edges_by_target(current_qn)
             for e in out_edges:
+                if edge_kinds and e.kind not in edge_kinds:
+                    continue
                 tgt = e.target_qualified
                 if tgt not in visited:
                     queue.append((tgt, cur_depth + 1))
             for e in in_edges:
+                if edge_kinds and e.kind not in edge_kinds:
+                    continue
                 src = e.source_qualified
                 if src not in visited:
                     queue.append((src, cur_depth + 1))
 
         return {
             "start_node": start_qn,
-            "mode": mode,
+            "method": method,
             "max_depth": depth,
             "nodes_visited": len(traversal),
             "traversal": traversal,
-            "truncated": approx_tokens > token_budget,
+            "truncated": approx_tokens > 2000,
             "next_tool_suggestions": [
                 "query_graph callers_of"
                 " -- focused relationship query",
