@@ -194,7 +194,7 @@
               onBoot = lib.mkOption {
                 type = lib.types.bool;
                 default = true;
-                description = "Build graph on service startup.";
+                description = "Create a systemd user service that builds the graph. Must be started manually with `systemctl --user start code-review-graph-build`.";
               };
 
               watchFiles = lib.mkOption {
@@ -228,7 +228,8 @@
               wantedBy = [ "default.target" ];
             };
 
-            # Auto-build on boot for each repository
+            # Auto-build service for each repository.
+            # NOT wantedBy default.target so it doesn't block nixos-rebuild switch.
             systemd.user.services.code-review-graph-build = lib.mkIf (cfg.autoBuild.enable && cfg.autoBuild.onBoot) {
               description = "Build code-review-graph for configured repositories";
               after = [ "network.target" ];
@@ -243,10 +244,12 @@
                   '') cfg.repositories}
                 '';
               };
-              wantedBy = [ "default.target" ];
+              # No wantedBy — must be started manually. First-time builds of
+              # large repos can take 30+ minutes and must not block activation.
             };
 
-            # File watcher service for auto-updates
+            # File watcher service for auto-updates.
+            # NOT wantedBy default.target so it doesn't block nixos-rebuild switch.
             systemd.user.services.code-review-graph-watch = lib.mkIf (cfg.autoBuild.enable && cfg.autoBuild.watchFiles) {
               description = "Watch files and auto-update code-review-graph";
               after = [ "code-review-graph-build.service" ];
@@ -262,7 +265,7 @@
                 '';
                 Restart = "on-failure";
               };
-              wantedBy = [ "default.target" ];
+              # No wantedBy — must be started manually alongside the build service.
             };
           };
         };
