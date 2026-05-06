@@ -317,7 +317,11 @@
           };
 
           config = lib.mkIf cfg.enable {
-            home.packages = [ cfg.package ];
+            # Note: we do NOT install cfg.package here.
+            # The NixOS module (services.code-review-graph) already adds
+            # the package to environment.systemPackages. Installing it again
+            # via home.packages causes a buildEnv conflict because the two
+            # flake self-references produce different derivations.
 
             # Install pi extension
             home.file = lib.mkIf cfg.installExtension {
