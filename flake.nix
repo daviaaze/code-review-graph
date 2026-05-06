@@ -141,9 +141,12 @@
       #   services.code-review-graph = {
       #     enable = true;
       #     repositories = [ /home/user/projects/my-app ];
-      #     mcpServer.enable = true;
       #     autoBuild.enable = true;
       #   };
+      #
+      # Note: There is NO MCP server systemd service. The stdio transport is
+      # spawned on-demand by the agent (pi). A persistent systemd service
+      # would conflict with that architecture.
       #
       nixosModules.default = { config, lib, pkgs, ... }:
         let
@@ -152,7 +155,7 @@
         in
         {
           options.services.code-review-graph = {
-            enable = lib.mkEnableOption "code-review-graph MCP server and auto-build hooks";
+            enable = lib.mkEnableOption "code-review-graph package and auto-build hooks";
 
             package = lib.mkOption {
               type = lib.types.package;
@@ -164,28 +167,6 @@
               type = lib.types.listOf lib.types.str;
               default = [];
               description = "List of repository paths to auto-build and watch.";
-            };
-
-            mcpServer = {
-              enable = lib.mkEnableOption "MCP server auto-start via systemd user service";
-
-              transport = lib.mkOption {
-                type = lib.types.enum [ "stdio" "http" ];
-                default = "stdio";
-                description = "MCP transport mode. stdio is for pi extension, http for external tools.";
-              };
-
-              port = lib.mkOption {
-                type = lib.types.port;
-                default = 8080;
-                description = "HTTP port when transport is http.";
-              };
-
-              host = lib.mkOption {
-                type = lib.types.str;
-                default = "127.0.0.1";
-                description = "HTTP host when transport is http.";
-              };
             };
 
             autoBuild = {
@@ -207,26 +188,6 @@
 
           config = lib.mkIf cfg.enable {
             environment.systemPackages = [ cfg.package ];
-
-            # Systemd user service for MCP server
-            systemd.user.services.code-review-graph-mcp = lib.mkIf cfg.mcpServer.enable {
-              description = "code-review-graph MCP server";
-              after = [ "network.target" ];
-              serviceConfig = {
-                Type = "simple";
-                ExecStart = lib.concatStringsSep " " ([
-                  "${cfg.package}/bin/code-review-graph"
-                  "serve"
-                ] ++ lib.optionals (cfg.mcpServer.transport == "http") [
-                  "--http"
-                  "--host" cfg.mcpServer.host
-                  "--port" (toString cfg.mcpServer.port)
-                ]);
-                Restart = "on-failure";
-                RestartSec = 5;
-              };
-              wantedBy = [ "default.target" ];
-            };
 
             # Auto-build service for each repository.
             # NOT wantedBy default.target so it doesn't block nixos-rebuild switch.
