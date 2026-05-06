@@ -210,11 +210,9 @@
 
             # Systemd user service for MCP server
             systemd.user.services.code-review-graph-mcp = lib.mkIf cfg.mcpServer.enable {
-              Unit = {
-                Description = "code-review-graph MCP server";
-                After = [ "network.target" ];
-              };
-              Service = {
+              description = "code-review-graph MCP server";
+              after = [ "network.target" ];
+              serviceConfig = {
                 Type = "simple";
                 ExecStart = lib.concatStringsSep " " ([
                   "${cfg.package}/bin/code-review-graph"
@@ -227,18 +225,14 @@
                 Restart = "on-failure";
                 RestartSec = 5;
               };
-              Install = {
-                WantedBy = [ "default.target" ];
-              };
+              wantedBy = [ "default.target" ];
             };
 
             # Auto-build on boot for each repository
             systemd.user.services.code-review-graph-build = lib.mkIf (cfg.autoBuild.enable && cfg.autoBuild.onBoot) {
-              Unit = {
-                Description = "Build code-review-graph for configured repositories";
-                After = [ "network.target" ];
-              };
-              Service = {
+              description = "Build code-review-graph for configured repositories";
+              after = [ "network.target" ];
+              serviceConfig = {
                 Type = "oneshot";
                 ExecStart = pkgs.writeShellScript "crg-build-all" ''
                   set -e
@@ -249,18 +243,14 @@
                   '') cfg.repositories}
                 '';
               };
-              Install = {
-                WantedBy = [ "default.target" ];
-              };
+              wantedBy = [ "default.target" ];
             };
 
             # File watcher service for auto-updates
             systemd.user.services.code-review-graph-watch = lib.mkIf (cfg.autoBuild.enable && cfg.autoBuild.watchFiles) {
-              Unit = {
-                Description = "Watch files and auto-update code-review-graph";
-                After = [ "code-review-graph-build.service" ];
-              };
-              Service = {
+              description = "Watch files and auto-update code-review-graph";
+              after = [ "code-review-graph-build.service" ];
+              serviceConfig = {
                 Type = "simple";
                 ExecStart = pkgs.writeShellScript "crg-watch" ''
                   set -e
@@ -272,9 +262,7 @@
                 '';
                 Restart = "on-failure";
               };
-              Install = {
-                WantedBy = [ "default.target" ];
-              };
+              wantedBy = [ "default.target" ];
             };
           };
         };
