@@ -29,7 +29,7 @@ def get_hub_nodes_func(
         top_n: Number of top hubs to return (default 10).
     """
     root = _validate_repo_root(repo_root)
-    store = _get_store(str(root))
+    store, _ = _get_store(str(root))
     hubs = find_hub_nodes(store, top_n=top_n)
     return {
         "hub_nodes": hubs,
@@ -57,7 +57,7 @@ def get_bridge_nodes_func(
         top_n: Number of top bridges to return (default 10).
     """
     root = _validate_repo_root(repo_root)
-    store = _get_store(str(root))
+    store, _ = _get_store(str(root))
     bridges = find_bridge_nodes(store, top_n=top_n)
     return {
         "bridge_nodes": bridges,
@@ -83,7 +83,7 @@ def get_knowledge_gaps_func(
         repo_root: Repository root (auto-detected if empty).
     """
     root = _validate_repo_root(repo_root)
-    store = _get_store(str(root))
+    store, _ = _get_store(str(root))
     gaps = find_knowledge_gaps(store)
     total = sum(len(v) for v in gaps.values())
     return {
@@ -119,7 +119,7 @@ def get_surprising_connections_func(
         top_n: Number of top surprises to return (default 15).
     """
     root = _validate_repo_root(repo_root)
-    store = _get_store(str(root))
+    store, _ = _get_store(str(root))
     surprises = find_surprising_connections(store, top_n=top_n)
     return {
         "surprising_connections": surprises,
@@ -147,7 +147,7 @@ def get_suggested_questions_func(
         changed_files: Optional list of changed files to focus questions on.
     """
     root = _validate_repo_root(repo_root)
-    store = _get_store(str(root))
+    store, _ = _get_store(str(root))
     questions = generate_suggested_questions(store, changed_files=changed_files)
     by_priority = {"high": [], "medium": [], "low": []}
     for q in questions:
