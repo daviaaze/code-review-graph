@@ -357,6 +357,7 @@ def semantic_search_nodes(
     repo_root: str | None = None,
     context_files: list[str] | None = None,
     model: str | None = None,
+    provider: str | None = None,
     detail_level: str = "standard",
 ) -> dict[str, Any]:
     """Search for nodes by name, keyword, or semantic similarity.
