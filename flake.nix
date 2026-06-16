@@ -19,6 +19,11 @@
           fastmcp = pyPrev.fastmcp.overridePythonAttrs (old: {
             doCheck = false;
           });
+          # cfn-lint 1.43.x adds new rules that cause quickstart template
+          # integration tests to fail (expected exit code 12, got 14).
+          cfn-lint = pyPrev.cfn-lint.overridePythonAttrs (old: {
+            doCheck = false;
+          });
         });
       };
 
